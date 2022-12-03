@@ -1,185 +1,144 @@
-use clap::Parser;
-use coingecko::SimplePriceReq;
-use env_file_reader::read_file;
-use isahc;
+use dialoguer::theme::ColorfulTheme;
+use dialoguer::*;
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use twilio::*;
 
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Cli {
-    #[structopt(short, long)]
-    add_currency: Option<String>,
+mod config;
+use config::Config;
 
-    #[structopt(short, long)]
-    notify: Option<String>,
+mod price;
+use price::{prices, PriceDetails};
 
-    #[structopt(long)]
-    min: Option<i64>,
-
-    #[structopt(long)]
-    max: Option<i64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Config {
-    currencies: Vec<String>,
-    priced_in: String,
-    notify_above: HashMap<String, Decimal>,
-    notify_below: HashMap<String, Decimal>,
-}
-
-impl Default for Config {
-    fn default() -> Config {
-        Config {
-            currencies: Vec::new(),
-            priced_in: String::from("usd"),
-            notify_above: HashMap::new(),
-            notify_below: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PriceDetails {
-    currency: String,
-    price: Decimal,
-}
-
-impl std::fmt::Display for PriceDetails {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: ({})", self.currency, self.price)
-    }
-}
-
-pub async fn prices(currencies: Vec<String>) -> Vec<PriceDetails> {
-    let http = isahc::HttpClient::new().unwrap();
-    let client = coingecko::Client::new(http);
-    let mut results: Vec<PriceDetails> = Vec::new();
-    for currency in currencies {
-        let price = {
-            let req =
-                SimplePriceReq::new(currency.clone().into(), "usd".into()).include_market_cap();
-            let price = client.simple_price(req).await.unwrap();
-            price
-                .get(&currency)
-                .expect("")
-                .get("usd")
-                .expect("")
-                .clone()
-        };
-        results.push(PriceDetails { currency, price });
-    }
-    results
-}
+mod notify;
+use notify::Notification;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let my_number = "+14254751977";
-    let to = "+41798458229";
-
     let home_dir = std::env::home_dir().unwrap();
     let config_dir = home_dir.join(".prices/");
     let config_src = config_dir.join("config");
 
-    let env_variables = read_file(".env")?;
-
+    // Load or setup new config
     let mut config: Config = match std::fs::read_to_string(config_src.clone()) {
         Ok(file) => serde_json::from_str(&file)?,
-        Err(e) => {
+        Err(_e) => {
             println!("Creating new config file");
             println!("creating dir: {:?}", config_dir);
             std::fs::create_dir_all(config_dir)?;
-            Config::default()
+            let mut c = Config::default();
+            c.my_number = Input::new()
+                .with_prompt("Twilio number from")
+                .interact_text()?;
+            c.to_number = Input::new()
+                .with_prompt("Twilio number to")
+                .interact_text()?;
+            c.account_id = Input::new()
+                .with_prompt("Twilio account id")
+                .interact_text()?;
+            c.auth_token = Password::new()
+                .with_prompt("Twilio auth token")
+                .interact()?;
+
+            serde_json::to_writer(&std::fs::File::create(&config_src).unwrap(), &c).unwrap();
+            println!("Successfully created new config file!");
+            c
         }
     };
 
-    let args = Cli::parse();
+    // CLI options
+    let items = vec![
+        "Get prices",
+        "Add Currency",
+        "Add Notification",
+        "Listen for notifications",
+        "Show config",
+    ];
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .items(&items)
+        .default(0)
+        .interact()?;
 
-    match args.add_currency {
-        Some(c) => {
-            if !config.currencies.contains(&c) {
-                config.currencies.push(c);
+    // Parse command and execute
+    match selection {
+        // get prices
+        0 => {
+            let prices = prices(config.currencies.clone()).await;
+            for price in prices {
+                println!("{:?}", &price);
             }
         }
-        None => (),
-    }
-
-    // Add notification?
-    match args.notify {
-        Some(currency) => {
+        // add currency
+        1 => {
+            let currency = Input::new()
+                .with_prompt("Full name of currency: (ie. bitcoin, ethereum, dogecoin...")
+                .interact_text()?;
             if !config.currencies.contains(&currency) {
-                panic!("Currency not added")
-            }
-            match args.max {
-                Some(max) => {
-                    config
-                        .notify_above
-                        .insert(currency.clone(), Decimal::from(max));
-                }
-                None => (),
-            }
-
-            match args.min {
-                Some(min) => {
-                    config.notify_below.insert(currency, Decimal::from(min));
-                }
-                None => (),
+                config.currencies.push(currency);
+            } else {
+                println!("Currency is already added")
             }
         }
-        None => (),
+        // add notification
+        2 => {
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .items(&config.currencies)
+                .interact()?;
+            let currency = config
+                .currencies
+                .get(selection)
+                .expect("Currency isnt added");
+
+            let pricing = PriceDetails {
+                currency: currency.clone(),
+                price: Decimal::from(0),
+            };
+
+            let max: u32 = Input::new()
+                .with_prompt("What is the notification price when it goes above")
+                .interact_text()?;
+            let max = if max == 0 { None } else { Some(max) };
+
+            let min: u32 = Input::new()
+                .with_prompt("What is the notification price when it goes below")
+                .interact_text()?;
+            let min = if min == 0 { None } else { Some(min) };
+
+            pricing.add_notifications(&mut config, max, min)
+        }
+        // Listen for notifications
+        3 => {
+            let client = twilio::Client::new(&config.account_id, &config.auth_token);
+            let delay: u64 = Input::new()
+                .with_prompt("How many seconds to wait between queries?")
+                .default(600)
+                .interact_text()?;
+            loop {
+                let mut messages: Vec<String> = Vec::new();
+                let prices = prices(config.currencies.clone()).await;
+                for price in prices {
+                    messages.append(&mut price.get_notifications(&config));
+                }
+
+                if messages.len() > 0 {
+                    println!("Sending {} messages!", messages.len());
+                    notify::send_messages(&config, &client, messages).await;
+                }
+
+                let seconds = std::time::Duration::from_secs(delay);
+                std::thread::sleep(seconds);
+            }
+        }
+        // Show config
+        4 => {
+            // TODO: implement display
+            println!("{:?}", &config);
+            return Ok(());
+        }
+        _ => {
+            panic!("Unknown command")
+        }
     }
 
     serde_json::to_writer(&std::fs::File::create(config_src).unwrap(), &config).unwrap();
 
-    let prices = prices(config.currencies.clone()).await;
-
-    let mut messages: Vec<String> = Vec::new();
-    let client = twilio::Client::new(&env_variables["ACCOUNT_ID"], &env_variables["AUTH_TOKEN"]);
-
-    for price in prices {
-        println!("{:?}", price);
-        if !config.currencies.contains(&price.currency) {
-            panic!("Currency not added")
-        }
-
-        match config.notify_below.get(&price.currency) {
-            Some(target) => {
-                if &price.price < target {
-                    let message =
-                        format!("{} target price dropped below: {}", price.currency, target);
-                    messages.push(message);
-                }
-            }
-            None => (),
-        }
-
-        match config.notify_above.get(&price.currency) {
-            Some(target) => {
-                if &price.price > target {
-                    let message = format!("{} target price went above: {}", price.currency, target);
-                    messages.push(message);
-                }
-            }
-            None => (),
-        }
-    }
-
-    for message in messages {
-        // Send message
-        match client
-            .send_message(OutboundMessage::new(my_number, to, &message))
-            .await
-        {
-            Ok(m) => {
-                println!("Message: {:?}", m);
-            }
-            Err(e) => {
-                println!("Error: {:?}", e);
-            }
-        } //
-    }
     Ok(())
 }

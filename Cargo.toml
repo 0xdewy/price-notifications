@@ -1,5 +1,5 @@
 [package]
-name = "price-notifications"
+name = "prices"
 version = "0.1.0"
 edition = "2021"
 author = "Kyle Dewhurst"
@@ -8,11 +8,11 @@ author = "Kyle Dewhurst"
 
 [dependencies]
 twilio = "*"
-env-file-reader = "*"
 tokio = { version = "0.2", features = ["macros", "rt-core", "test-util"] }
 coingecko = { git = "https://github.com/kyledewy/coingecko-rs" }
 isahc = { version = "0.9", default-features = false, features = ["http2", "text-decoding"]}
 rust_decimal = "*"
 serde_json = "*"
 serde = "*"
-clap = { version = "4.0.26", features = ["derive"] }
+async-trait = "*"
+dialoguer = "*"
