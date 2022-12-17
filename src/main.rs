@@ -1,18 +1,19 @@
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::*;
 use rust_decimal::Decimal;
+use anyhow::Result;
 
 mod config;
 use config::Config;
 
 mod price;
-use price::{prices, PriceDetails};
+use price::{prices, PriceDetails, SupportedCurrenciesTrait};
 
 mod notify;
 use notify::Notification;
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<()> {
     let home_dir = std::env::home_dir().unwrap();
     let config_dir = home_dir.join(".prices/");
     let config_src = config_dir.join("config");
@@ -68,13 +69,24 @@ async fn main() -> std::io::Result<()> {
         }
         // add currency
         1 => {
-            let currency = Input::new()
-                .with_prompt("Full name of currency: (ie. bitcoin, ethereum, dogecoin...")
+            // get currency from user prompt
+            let currency_string: String = Input::new()
+                .with_prompt("Full name of currencies: bitcoin, ethereum, dogecoin \n Or else pass the symbol: btc, eth, doge")
                 .interact_text()?;
-            if !config.currencies.contains(&currency) {
-                config.currencies.push(currency);
-            } else {
-                println!("Currency is already added")
+
+            // seperate currency_string by commas and trim whitespace annd make it lowercase
+            let currencies: Vec<String> = currency_string
+                .split(",")
+                .map(|s| s.trim().to_lowercase())
+                .collect::<Vec<String>>();
+
+            for currency in currencies.iter() {
+                let currency = currency.full_name()?;
+                if !config.currencies.contains(&currency) {
+                    config.currencies.push(currency);
+                } else {
+                    println!("Currency is already added")
+                }
             }
         }
         // add notification
@@ -111,6 +123,7 @@ async fn main() -> std::io::Result<()> {
                 .with_prompt("How many seconds to wait between queries?")
                 .default(600)
                 .interact_text()?;
+            // Send all messages and then sleep for inputted number of seconds
             loop {
                 let mut messages: Vec<String> = Vec::new();
                 let prices = prices(config.currencies.clone()).await;
@@ -130,7 +143,7 @@ async fn main() -> std::io::Result<()> {
         // Show config
         4 => {
             // TODO: implement display
-            println!("{:?}", &config);
+            println!("{}", &config);
             return Ok(());
         }
         _ => {
@@ -138,6 +151,7 @@ async fn main() -> std::io::Result<()> {
         }
     }
 
+    println!("{:?}", &config);
     serde_json::to_writer(&std::fs::File::create(config_src).unwrap(), &config).unwrap();
 
     Ok(())

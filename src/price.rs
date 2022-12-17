@@ -1,6 +1,65 @@
-use serde::{Deserialize, Serialize};
-use rust_decimal::Decimal;
+use anyhow::*;
 use coingecko::SimplePriceReq;
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
+
+// TODO: rename to coingecko
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SupportedCurrencies {
+    id: String,
+    symbol: String,
+    name: String,
+}
+pub trait SupportedCurrenciesTrait {
+    fn get_supported_currencies() -> Vec<SupportedCurrencies> {
+        // TODO: query coingecko and save or use local file?
+        let supported_currencies: Vec<SupportedCurrencies> =
+            serde_json::from_str(include_str!("../data/coingecko_supported_coins.json")).unwrap();
+        return supported_currencies;
+    }
+
+    fn full_name(&self) -> Result<String, Error>;
+
+    fn is_supported_currency(&self) -> bool;
+}
+
+impl SupportedCurrenciesTrait for String {
+    fn is_supported_currency(&self) -> bool {
+        let supported_currencies = Self::get_supported_currencies();
+        for supported_currency in supported_currencies {
+            if supported_currency.id.to_lowercase() == self.to_lowercase() {
+                return true;
+            }
+            if supported_currency.symbol.to_lowercase() == self.to_lowercase() {
+                return true;
+            }
+            if supported_currency.name.to_lowercase() == self.to_lowercase() {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn full_name(&self) -> Result<String, Error> {
+        let supported_currencies = Self::get_supported_currencies();
+        for supported_currency in supported_currencies {
+            if supported_currency.id.to_lowercase() == self.to_lowercase() {
+                return Ok(supported_currency.name.to_lowercase());
+            }
+            if supported_currency.symbol.to_lowercase() == self.to_lowercase() {
+                return Ok(supported_currency.name.to_lowercase());
+            }
+            if supported_currency.name.to_lowercase() == self.to_lowercase() {
+                return Ok(supported_currency.name.to_lowercase());
+            }
+        }
+        Err(anyhow!(format!(
+            "Not a supported currency: {}",
+            self.to_string()
+        )))
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PriceDetails {
@@ -10,10 +69,11 @@ pub struct PriceDetails {
 
 impl std::fmt::Display for PriceDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: ({})", self.currency, self.price)
+        write!(f, "{}: {:.2} USD", self.currency, self.price)
     }
 }
 
+// TODO: use config default price
 pub async fn prices(currencies: Vec<String>) -> Vec<PriceDetails> {
     let http = isahc::HttpClient::new().unwrap();
     let client = coingecko::Client::new(http);
@@ -28,3 +88,5 @@ pub async fn prices(currencies: Vec<String>) -> Vec<PriceDetails> {
     }
     results
 }
+
+//
