@@ -1,6 +1,5 @@
 use super::config::Config;
 use super::price::PriceDetails;
-use rust_decimal::Decimal;
 use twilio::{Client, OutboundMessage};
 
 pub trait Notification {
@@ -17,7 +16,7 @@ impl Notification for PriceDetails {
             Some(max) => {
                 config
                     .notify_above
-                    .insert(self.currency.clone(), Decimal::from(max));
+                    .insert(self.currency.clone(), f64::from(max));
             }
             None => (),
         }
@@ -26,7 +25,7 @@ impl Notification for PriceDetails {
             Some(min) => {
                 config
                     .notify_below
-                    .insert(self.currency.clone(), Decimal::from(min));
+                    .insert(self.currency.clone(), f64::from(min));
             }
             None => (),
         }

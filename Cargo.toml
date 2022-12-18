@@ -8,10 +8,8 @@ author = "Kyle Dewhurst"
 
 [dependencies]
 twilio = "*"
-tokio = { version = "0.2", features = ["macros", "rt-core", "test-util"] }
-coingecko = { git = "https://github.com/kyledewy/coingecko-rs" }
-isahc = { version = "0.9", default-features = false, features = ["http2", "text-decoding"]}
-rust_decimal = "*"
+tokio = { version = "1.6.0", features = ["full"] }
+coingecko = "*"
 serde_json = "*"
 serde = "*"
 async-trait = "*"

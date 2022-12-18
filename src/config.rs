@@ -1,4 +1,3 @@
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -6,8 +5,8 @@ use std::collections::HashMap;
 pub struct Config {
     pub currencies: Vec<String>,
     pub priced_in: String,
-    pub notify_above: HashMap<String, Decimal>,
-    pub notify_below: HashMap<String, Decimal>,
+    pub notify_above: HashMap<String, f64>,
+    pub notify_below: HashMap<String, f64>,
     pub my_number: String,
     pub to_number: String,
     pub account_id: String,
@@ -33,7 +32,13 @@ impl std::fmt::Display for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut output = String::new();
         for currency in self.currencies.iter() {
-            output = format!("\n{}{}", output, &currency);
+            output = format!("{} \n {}", output, &currency);
+            if let Some(notify_above) = self.notify_above.get(currency) {
+                output = format!("{} \n ==> notify above: {}", output, notify_above);
+            }
+            if let Some(notify_below) = self.notify_below.get(currency) {
+                output = format!("{} \n ==> notify below: {}", output, notify_below);
+            }
         }
         write!(f, "{}", output)
     }

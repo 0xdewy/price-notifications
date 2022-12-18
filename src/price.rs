@@ -1,9 +1,6 @@
 use anyhow::*;
-use coingecko::SimplePriceReq;
-use rust_decimal::Decimal;
+use coingecko::CoinGeckoClient;
 use serde::{Deserialize, Serialize};
-
-// TODO: rename to coingecko
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SupportedCurrencies {
@@ -64,7 +61,7 @@ impl SupportedCurrenciesTrait for String {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PriceDetails {
     pub currency: String,
-    pub price: Decimal,
+    pub price: f64,
 }
 
 impl std::fmt::Display for PriceDetails {
@@ -75,18 +72,40 @@ impl std::fmt::Display for PriceDetails {
 
 // TODO: use config default price
 pub async fn prices(currencies: Vec<String>) -> Vec<PriceDetails> {
-    let http = isahc::HttpClient::new().unwrap();
-    let client = coingecko::Client::new(http);
+    let client = coingecko::CoinGeckoClient::default();
     let mut results: Vec<PriceDetails> = Vec::new();
+    let prices = client
+        .price(currencies.as_slice(), &["usd"], true, false, false, true)
+        .await
+        .unwrap();
     for currency in currencies {
         let price = {
-            let req = SimplePriceReq::new(currency.clone(), "usd".into()).include_market_cap();
-            let price = client.simple_price(req).await.unwrap();
-            *price.get(&currency).expect("").get("usd").expect("")
+            match prices.get(&currency) {
+                Some(prices) => prices.usd.expect("no usd"),
+                None => {
+                    println!("No price for {}, coingecko may not support the full name of this currency, try the symbol", currency);
+                    continue;
+                }
+            }
         };
+
         results.push(PriceDetails { currency, price });
     }
     results
 }
 
-//
+// // TODO: use config default price
+// pub async fn prices(currencies: Vec<String>) -> Vec<PriceDetails> {
+//     let http = isahc::HttpClient::new().unwrap();
+//     let client = coingecko::Client::new(http);
+//     let mut results: Vec<PriceDetails> = Vec::new();
+//     for currency in currencies {
+//         let price = {
+//             let req = SimplePriceReq::new(currency.clone(), "usd".into()).include_market_cap();
+//             let price = client.simple_price(req).await.unwrap();
+//             *price.get(&currency).expect("").get("usd").expect("")
+//         };
+//         results.push(PriceDetails { currency, price });
+//     }
+//     results
+// }

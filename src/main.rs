@@ -1,6 +1,5 @@
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::*;
-use rust_decimal::Decimal;
 use anyhow::Result;
 
 mod config;
@@ -16,7 +15,7 @@ use notify::Notification;
 async fn main() -> Result<()> {
     let home_dir = std::env::home_dir().unwrap();
     let config_dir = home_dir.join(".prices/");
-    let config_src = config_dir.join("config");
+    let config_src = config_dir.join("config.json");
 
     // Load or setup new config
     let mut config: Config = match std::fs::read_to_string(config_src.clone()) {
@@ -101,7 +100,7 @@ async fn main() -> Result<()> {
 
             let pricing = PriceDetails {
                 currency: currency.clone(),
-                price: Decimal::from(0),
+                price: 0.0,
             };
 
             let max: u32 = Input::new()
