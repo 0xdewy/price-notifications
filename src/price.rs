@@ -1,5 +1,6 @@
 use anyhow::*;
 use coingecko::CoinGeckoClient;
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,7 +67,12 @@ pub struct PriceDetails {
 
 impl std::fmt::Display for PriceDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: {:.2} USD", self.currency, self.price)
+        write!(
+            f,
+            "{}: {:.8} USD",
+            self.currency.blue(),
+            self.price.to_string().green()
+        )
     }
 }
 
@@ -83,7 +89,13 @@ pub async fn prices(currencies: Vec<String>) -> Vec<PriceDetails> {
             match prices.get(&currency) {
                 Some(prices) => prices.usd.expect("no usd"),
                 None => {
-                    println!("No price for {}, coingecko may not support the full name of this currency, try the symbol", currency);
+                    println!(
+                        "{}. {}. {}",
+                        "Failed to get the price of".red(),
+                        &currency.blue(),
+                        "Coingecko may not support the full name of this currency, try the symbol"
+                            .red()
+                    );
                     continue;
                 }
             }
@@ -93,19 +105,3 @@ pub async fn prices(currencies: Vec<String>) -> Vec<PriceDetails> {
     }
     results
 }
-
-// // TODO: use config default price
-// pub async fn prices(currencies: Vec<String>) -> Vec<PriceDetails> {
-//     let http = isahc::HttpClient::new().unwrap();
-//     let client = coingecko::Client::new(http);
-//     let mut results: Vec<PriceDetails> = Vec::new();
-//     for currency in currencies {
-//         let price = {
-//             let req = SimplePriceReq::new(currency.clone(), "usd".into()).include_market_cap();
-//             let price = client.simple_price(req).await.unwrap();
-//             *price.get(&currency).expect("").get("usd").expect("")
-//         };
-//         results.push(PriceDetails { currency, price });
-//     }
-//     results
-// }

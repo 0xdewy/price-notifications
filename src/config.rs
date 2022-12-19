@@ -27,19 +27,3 @@ impl Default for Config {
         }
     }
 }
-
-impl std::fmt::Display for Config {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut output = String::new();
-        for currency in self.currencies.iter() {
-            output = format!("{} \n {}", output, &currency);
-            if let Some(notify_above) = self.notify_above.get(currency) {
-                output = format!("{} \n ==> notify above: {}", output, notify_above);
-            }
-            if let Some(notify_below) = self.notify_below.get(currency) {
-                output = format!("{} \n ==> notify below: {}", output, notify_below);
-            }
-        }
-        write!(f, "{}", output)
-    }
-}

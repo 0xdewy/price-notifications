@@ -1,6 +1,7 @@
+use anyhow::Result;
+use colored::Colorize;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::*;
-use anyhow::Result;
 
 mod config;
 use config::Config;
@@ -21,7 +22,7 @@ async fn main() -> Result<()> {
     let mut config: Config = match std::fs::read_to_string(config_src.clone()) {
         Ok(file) => serde_json::from_str(&file)?,
         Err(_e) => {
-            println!("Creating new config file");
+            println!("{}", "Creating new config file".blue());
             println!("creating dir: {:?}", config_dir);
             std::fs::create_dir_all(config_dir)?;
             let mut c = Config::default();
@@ -63,14 +64,14 @@ async fn main() -> Result<()> {
         0 => {
             let prices = prices(config.currencies.clone()).await;
             for price in prices {
-                println!("{:?}", &price);
+                println!("{:}", &price);
             }
         }
         // add currency
         1 => {
             // get currency from user prompt
             let currency_string: String = Input::new()
-                .with_prompt("Full name of currencies: bitcoin, ethereum, dogecoin \n Or else pass the symbol: btc, eth, doge")
+                .with_prompt("Comma seperated list of currencies: bitcoin, ethereum, doge, xmr")
                 .interact_text()?;
 
             // seperate currency_string by commas and trim whitespace annd make it lowercase
@@ -84,7 +85,7 @@ async fn main() -> Result<()> {
                 if !config.currencies.contains(&currency) {
                     config.currencies.push(currency);
                 } else {
-                    println!("Currency is already added")
+                    println!("{}", "Currency is already added".red())
                 }
             }
         }
@@ -141,8 +142,7 @@ async fn main() -> Result<()> {
         }
         // Show config
         4 => {
-            // TODO: implement display
-            println!("{}", &config);
+            println!("{:#?}", &config);
             return Ok(());
         }
         _ => {
@@ -150,7 +150,6 @@ async fn main() -> Result<()> {
         }
     }
 
-    println!("{:?}", &config);
     serde_json::to_writer(&std::fs::File::create(config_src).unwrap(), &config).unwrap();
 
     Ok(())
