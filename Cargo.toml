@@ -8,7 +8,7 @@ author = "Kyle Dewhurst"
 
 [dependencies]
 twilio = "*"
-tokio = { version = "1.6.0", features = ["full"] }
+tokio = { version = "1.24.2", features = ["full"] }
 coingecko = "*"
 serde_json = "*"
 serde = "*"
