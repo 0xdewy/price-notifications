@@ -62,13 +62,13 @@ pub async fn update_supported_currencies() -> Result<(), Error> {
     Ok(())
 }
 
-pub fn get_currency_ids(nameOrSymbol: &str) -> Result<Vec<String>, Error> {
+pub fn get_currency_ids(name_or_symbol: &str) -> Result<Vec<String>, Error> {
     let supported_currencies = get_supported_currencies();
     let mut matches: Vec<String> = Vec::new();
     for supported_currency in supported_currencies {
-        if supported_currency.id.to_lowercase() != nameOrSymbol.to_lowercase()
-            && supported_currency.name.to_lowercase() != nameOrSymbol.to_lowercase()
-            && supported_currency.symbol.to_lowercase() != nameOrSymbol.to_lowercase()
+        if supported_currency.id.to_lowercase() != name_or_symbol.to_lowercase()
+            && supported_currency.name.to_lowercase() != name_or_symbol.to_lowercase()
+            && supported_currency.symbol.to_lowercase() != name_or_symbol.to_lowercase()
         {
             continue;
         }
@@ -77,7 +77,7 @@ pub fn get_currency_ids(nameOrSymbol: &str) -> Result<Vec<String>, Error> {
     if matches.len() == 0 {
         return Err(anyhow!(format!(
             "Not a supported currency: {}",
-            nameOrSymbol.to_string()
+            name_or_symbol.to_string()
         )));
     }
 

@@ -20,30 +20,16 @@ pub const CONFIG_DIR: &str = ".config/price-notifications";
 async fn main() -> Result<()> {
     let home_dir = std::env::home_dir().unwrap();
     let config_dir = home_dir.join(CONFIG_DIR);
+    let logs_dir = config_dir.join("logs");
     let config_src = config_dir.join("config.json");
-
-    Logger::try_with_str("info")?
-        .log_to_file(
-            FileSpec::default()
-                .directory(config_dir.clone()) // create files in folder ./log_files
-                .basename("logs"),
-        )
-        .print_message() //
-        .create_symlink("current_run") // create a symbolic link to the current log file
-        .start()?;
-
-    info!("Starting price-notifications");
-
-    log::info!("Starting price-notifications");
-    println!("config file: {:?}", config_src);
-
-    // Load or setup new config
+    // Load or setup new config and download supported currencies
     let mut config: Config = match std::fs::read_to_string(config_src.clone()) {
         Ok(file) => serde_json::from_str(&file)?,
         Err(_e) => {
             println!("{}", "Creating new config file".blue());
             println!("creating dir: {:?}", &config_dir);
             std::fs::create_dir_all(&config_dir)?;
+            std::fs::create_dir_all(&logs_dir)?;
             let mut c = Config::default();
             c.my_number = Input::new()
                 .with_prompt("Twilio number from")
@@ -65,6 +51,17 @@ async fn main() -> Result<()> {
             c
         }
     };
+
+    Logger::try_with_str("info")?
+        .log_to_file(
+            FileSpec::default()
+                .directory(&logs_dir.clone()) // create files in folder ./log_files
+                .basename("logs"),
+        )
+        .print_message()
+        .start()?;
+
+    info!("Starting price-notifications");
 
     // CLI options
     let items = vec![
@@ -162,6 +159,7 @@ async fn main() -> Result<()> {
 
             pricing.add_notifications(&mut config, max, min)
         }
+
         // Listen for notifications
         4 => {
             let current_uid = users::get_current_uid();
@@ -196,26 +194,32 @@ async fn main() -> Result<()> {
                 .working_directory(&config_dir) // Changing the working directory to CONFIG_DIR.
                 .user(&*current_username)
                 .group(&*current_groupname)
-                .umask(0o777) // You might want to change this to a more restrictive umask.
-                .privileged_action(|| "Executed before drop privileges");
+                .umask(600);
 
             match daemonize.start() {
                 Ok(_) => info!("Success, daemonized"),
-                Err(e) => error!("Error, {}", e),
+                Err(e) => {
+                    println!("Error, {}", e);
+                    error!("Error, {}", e);
+                    std::process::exit(1);
+                }
             }
 
-            // Spawn an async task
-            tokio::spawn(async move {
+            let cloned_config = config.clone();
+            // Spawn an async task and get its JoinHandle
+            let handle = tokio::spawn(async move {
                 loop {
                     let mut messages: Vec<String> = Vec::new();
-                    let prices = prices(config.currencies.clone()).await;
+                    let prices = prices(cloned_config.currencies.clone()).await;
                     for price in prices {
-                        messages.append(&mut price.get_notifications(&config));
+                        messages.append(&mut price.get_notifications(&cloned_config));
                     }
 
                     if messages.len() > 0 {
-                        println!("Sending {} messages!", messages.len());
-                        notify::send_messages(&config, &client, messages).await;
+                        info!("Sending {} messages!", messages.len());
+                        notify::send_messages(&cloned_config, &client, messages).await;
+                    } else {
+                        info!("No messages to send");
                     }
 
                     // Sleep for the specified duration
@@ -223,9 +227,10 @@ async fn main() -> Result<()> {
                 }
             });
 
-            // This is necessary to keep the main process running.
-            loop {
-                sleep(Duration::from_secs(u64::MAX)).await;
+            // Wait for the task to finish. This will keep the main process running
+            // as long as the task is running.
+            if let Err(e) = handle.await {
+                error!("Error from listening task: {}", e);
             }
         }
 
