@@ -34,7 +34,6 @@ impl Notification for PriceDetails {
     fn get_notifications(&self, config: &Config) -> Vec<String> {
         let mut messages: Vec<String> = Vec::new();
 
-        println!("{:?}", self.price);
         if !config.currencies.contains(&self.currency) {
             panic!("Currency not added")
         }
