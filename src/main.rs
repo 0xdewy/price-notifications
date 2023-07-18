@@ -1,6 +1,5 @@
 use anyhow::Result;
 use colored::Colorize;
-use daemonize::Daemonize;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::*;
 use flexi_logger::{opt_format, FileSpec, Logger};
@@ -22,6 +21,18 @@ async fn main() -> Result<()> {
     let config_dir = home_dir.join(CONFIG_DIR);
     let logs_dir = config_dir.join("logs");
     let config_src = config_dir.join("config.json");
+
+    Logger::try_with_str("info")?
+        .log_to_file(
+            FileSpec::default()
+                .directory(&logs_dir.clone()) // create files in folder ./log_files
+                .basename("logs"),
+        )
+        .print_message()
+        .start()?;
+
+    info!("Starting price-notifications");
+
     // Load or setup new config and download supported currencies
     let mut config: Config = match std::fs::read_to_string(config_src.clone()) {
         Ok(file) => serde_json::from_str(&file)?,
@@ -52,16 +63,42 @@ async fn main() -> Result<()> {
         }
     };
 
-    Logger::try_with_str("info")?
-        .log_to_file(
-            FileSpec::default()
-                .directory(&logs_dir.clone()) // create files in folder ./log_files
-                .basename("logs"),
-        )
-        .print_message()
-        .start()?;
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        if args[1] == "listen" {
+            let client = twilio::Client::new(&config.account_id, &config.auth_token);
+            let delay = match args.get(2) {
+                Some(delay) => delay.parse::<u64>().unwrap(),
+                None => 600,
+            };
+            let delay = Duration::from_secs(delay);
 
-    info!("Starting price-notifications");
+            loop {
+                let mut messages: Vec<String> = Vec::new();
+                let prices = match prices(config.currencies.clone()).await {
+                    Ok(prices) => prices,
+                    Err(e) => {
+                        println!("Error, {}", e);
+                        error!("Error, {}", e);
+                        std::process::exit(1);
+                    }
+                };
+                for price in prices {
+                    messages.append(&mut price.get_notifications(&config));
+                }
+
+                if messages.len() > 0 {
+                    info!("Sending {} messages!", messages.len());
+                    notify::send_messages(&config, &client, messages).await;
+                } else {
+                    info!("No messages to send");
+                }
+
+                // Sleep for the specified duration
+                sleep(delay).await;
+            }
+        }
+    }
 
     // CLI options
     let items = vec![
@@ -69,7 +106,6 @@ async fn main() -> Result<()> {
         "Add Currency",
         "Remove Currency",
         "Add Notification",
-        "Listen for notifications",
         "Update supported currencies",
         "Show config",
     ];
@@ -82,10 +118,11 @@ async fn main() -> Result<()> {
     match selection {
         // get prices
         0 => {
-            let prices = prices(config.currencies.clone()).await;
-            if prices.len() == 0 {
+            if config.currencies.len() == 0 {
                 println!("No currencies added yet!");
             }
+            let prices = prices(config.currencies.clone()).await?;
+
             for price in prices {
                 println!("{:}", &price);
             }
@@ -160,86 +197,12 @@ async fn main() -> Result<()> {
             pricing.add_notifications(&mut config, max, min)
         }
 
-        // Listen for notifications
-        4 => {
-            let current_uid = users::get_current_uid();
-            let current_username = users::get_user_by_uid(current_uid)
-                .unwrap()
-                .name()
-                .to_string_lossy()
-                .into_owned();
-
-            let current_gid = users::get_current_gid();
-            let current_groupname = users::get_group_by_gid(current_gid)
-                .unwrap()
-                .name()
-                .to_string_lossy()
-                .into_owned();
-
-            let client = twilio::Client::new(&config.account_id, &config.auth_token);
-            let delay: u64 = Input::new()
-                .with_prompt("How many seconds to wait between queries?")
-                .default(600)
-                .interact_text()
-                .unwrap();
-
-            let delay = Duration::from_secs(delay);
-
-            info!("starting daemon to listen for price notifications");
-
-            let pid_file = config_dir.join("price_listening_daemon.pid");
-            let daemonize = Daemonize::new()
-                .pid_file(pid_file) // Now the pid file will be in the CONFIG_DIR.
-                .chown_pid_file(true)
-                .working_directory(&config_dir) // Changing the working directory to CONFIG_DIR.
-                .user(&*current_username)
-                .group(&*current_groupname)
-                .umask(600);
-
-            match daemonize.start() {
-                Ok(_) => info!("Success, daemonized"),
-                Err(e) => {
-                    println!("Error, {}", e);
-                    error!("Error, {}", e);
-                    std::process::exit(1);
-                }
-            }
-
-            let cloned_config = config.clone();
-            // Spawn an async task and get its JoinHandle
-            let handle = tokio::spawn(async move {
-                loop {
-                    let mut messages: Vec<String> = Vec::new();
-                    let prices = prices(cloned_config.currencies.clone()).await;
-                    for price in prices {
-                        messages.append(&mut price.get_notifications(&cloned_config));
-                    }
-
-                    if messages.len() > 0 {
-                        info!("Sending {} messages!", messages.len());
-                        notify::send_messages(&cloned_config, &client, messages).await;
-                    } else {
-                        info!("No messages to send");
-                    }
-
-                    // Sleep for the specified duration
-                    sleep(delay).await;
-                }
-            });
-
-            // Wait for the task to finish. This will keep the main process running
-            // as long as the task is running.
-            if let Err(e) = handle.await {
-                error!("Error from listening task: {}", e);
-            }
-        }
-
         // Update supported currencies
-        5 => {
+        4 => {
             price::update_supported_currencies().await?;
         }
         // Show config
-        6 => {
+        5 => {
             println!("config file: {:?}", &config_src);
             println!("{:#?}", &config);
             return Ok(());

@@ -101,32 +101,28 @@ impl std::fmt::Display for PriceDetails {
     }
 }
 
-// TODO: use config default price
-pub async fn prices(currencies: Vec<String>) -> Vec<PriceDetails> {
+// TODO: use config for usd vs other currencies
+pub async fn prices(currencies: Vec<String>) -> Result<Vec<PriceDetails>> {
     let client = coingecko::CoinGeckoClient::default();
     let mut results: Vec<PriceDetails> = Vec::new();
     let prices = client
         .price(currencies.as_slice(), &["usd"], true, false, false, true)
-        .await
-        .unwrap();
+        .await?;
     for currency in currencies {
-        let price = {
-            match prices.get(&currency) {
-                Some(prices) => prices.usd.expect("no usd"),
-                None => {
-                    println!(
-                        "{}. {}. {}",
-                        "Failed to get the price of".red(),
-                        &currency.blue(),
-                        "Coingecko may not support the full name of this currency, try the symbol"
-                            .red()
-                    );
-                    continue;
+        match prices.get(&currency) {
+            Some(prices) => {
+                if let None = prices.usd {
+                    return Err(anyhow!(format!("Failed to get the price of {}", currency)));
                 }
+                results.push(PriceDetails {
+                    currency: currency.clone(),
+                    price: prices.usd.unwrap(),
+                });
             }
-        };
-
-        results.push(PriceDetails { currency, price });
+            None => {
+                return Err(anyhow!(format!("Failed to get the price of {}", currency)));
+            }
+        }
     }
-    results
+    Ok(results)
 }
