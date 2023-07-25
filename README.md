@@ -10,6 +10,34 @@ Track coins from coingecko and receive sms notification at desired price points
 
 To receive notifications you must setup an account on [Twilio](https://www.twilio.com/)
 
-run cli and input phone numbers and twilio auth code
-`price-notifications`
 
+## Example
+
+First time executing the cli will open up dialoguer to setup twilio details and will download a list of supported currencies to `home/user/.config/price-notifications`
+
+```bash
+❯ `price-notifications`
+
+Log is written to /home/user/.config/price-notifications/logs/logs_2023-07-25_09-59-55.log
+
+Creating new config file
+creating dir: "/home/user/.config/price-notifications"
+
+Twilio number from: +111111111111111
+Twilio number to: +12222222222222
+Twilio account id: yourtwilioaccountid
+Twilio auth token: [hidden]
+Successfully created new config file!
+
+```
+
+```bash
+❯ price-notifications
+Log is written to /home/user/.config/price-notifications/logs/logs_2023-07-25_09-55-07.log
+❯ Get prices
+  Add Currency
+  Remove Currency
+  Add Notification
+  Update supported currencies
+  Show config
+```
