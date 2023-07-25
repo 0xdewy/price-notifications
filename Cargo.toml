@@ -9,14 +9,14 @@ license = "GPL-3.0-or-later"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-twilio = "*"
+twilio = "1.0.2"
 tokio = { version = "1.6.0", features = ["full"] }
-coingecko = "*"
-serde_json = "*"
-serde = "*"
-async-trait = "*"
-dialoguer = "*"
-anyhow = "*"
-colored = "*"
+coingecko = "1.0.1"
+serde_json = "1.0.103"
+serde = "1.0.175"
+async-trait = "0.1.72"
+dialoguer = "0.10.4"
+anyhow = "1.0.72"
+colored = "2.0.4"
 log = "0.4"
-flexi_logger = "*"
+flexi_logger = "0.25.5"
