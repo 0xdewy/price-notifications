@@ -1,5 +1,5 @@
 [package]
-name = "prices"
+name = "price-notifications"
 version = "0.1.0"
 edition = "2021"
 author = "kyle dewy"
@@ -18,4 +18,3 @@ anyhow = "*"
 colored = "*"
 log = "0.4"
 flexi_logger = "*"
-users = "0.11.0"
