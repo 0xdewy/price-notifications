@@ -3,6 +3,8 @@ name = "price-notifications"
 version = "0.1.0"
 edition = "2021"
 author = "kyle dewy"
+description = "A simple CLI tool to send cryptocurrency price notifications via SMS"
+license = "GPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
