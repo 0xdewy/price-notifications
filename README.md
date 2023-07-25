@@ -16,7 +16,7 @@ To receive notifications you must setup an account on [Twilio](https://www.twili
 First time executing the cli will open up dialoguer to setup twilio details and will download a list of supported currencies to `home/user/.config/price-notifications`
 
 ```bash
-❯ `price-notifications`
+❯ price-notifications
 
 Log is written to /home/user/.config/price-notifications/logs/logs_2023-07-25_09-59-55.log
 
@@ -33,7 +33,9 @@ Successfully created new config file!
 
 ```bash
 ❯ price-notifications
+
 Log is written to /home/user/.config/price-notifications/logs/logs_2023-07-25_09-55-07.log
+
 ❯ Get prices
   Add Currency
   Remove Currency
